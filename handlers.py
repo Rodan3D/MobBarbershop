@@ -29,6 +29,7 @@ from telebot import types
 
 appointments = {}
 
+
 def setup_handlers(bot):
     """
     Настраивает все обработчики для взаимодействия с ботом.
@@ -46,7 +47,7 @@ def setup_handlers(bot):
         """
         markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
         markup.add("Записаться на услугу", "Просмотреть записи", "Отменить запись")
-        bot.send_message(chat_id, "Добро пожаловать в Cтудию МОБ! Выберите действие:", reply_markup=markup)
+        bot.send_message(chat_id, "Добро пожаловать в Cтудию МОБ! \nВыберите действие:", reply_markup=markup)
 
     @bot.message_handler(commands=['start'])
     def start_message(message):
