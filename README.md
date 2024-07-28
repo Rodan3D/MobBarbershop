@@ -29,9 +29,8 @@ Telegram чат-бот предназначен для упрощения про
 
 1. Склонируйте репозиторий или загрузите файлы проекта.
 
-```bash
+```
 git clone https://github.com/Rodan3D/MobBarbershop.git
-cd barbershop-telegram-bot
 ```
 
 2.Установите необходимые зависимости:
