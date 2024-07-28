@@ -33,7 +33,7 @@ Telegram чат-бот предназначен для упрощения про
 git clone https://github.com/Rodan3D/MobBarbershop.git
 ```
 
-2.Установите необходимые зависимости:
+2. Установите необходимые зависимости:
 ```
 pip install -r requirements.txt
 ```
