@@ -91,10 +91,12 @@ def setup_handlers(bot):
             call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
         """
         employee = call.data.split('employee_')[1]
-        appointments[call.message.chat.id] = {"employee": employee}
-        choose_service(call.message.chat.id)
+        if call.message.chat.id not in appointments:
+            appointments[call.message.chat.id] = []
+        appointments[call.message.chat.id].append({"employee": employee})
+        choose_service(call.message.chat.id, employee)
 
-    def choose_service(chat_id):
+    def choose_service(chat_id, employee):
         """
         Отправляет пользователю список услуг для выбора.
 
@@ -102,8 +104,8 @@ def setup_handlers(bot):
             chat_id (int): ID чата Telegram.
         """
         markup = types.InlineKeyboardMarkup()
-        for service in SERVICES:
-            markup.add(types.InlineKeyboardButton(service, callback_data=f"service_{service}"))
+        for service, price in SERVICES[employee]:
+            markup.add(types.InlineKeyboardButton(f"{service} - {price}", callback_data=f"service_{service}"))
         markup.add(types.InlineKeyboardButton("Назад", callback_data="choose_employee"))
         bot.send_message(chat_id, "Выберите услугу:", reply_markup=markup)
 
@@ -116,7 +118,8 @@ def setup_handlers(bot):
             call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
         """
         service = call.data.split('service_')[1]
-        appointments[call.message.chat.id]['service'] = service
+        if call.message.chat.id in appointments and appointments[call.message.chat.id]:
+            appointments[call.message.chat.id][-1]['service'] = service
         choose_datetime(call.message.chat.id)
 
     def choose_datetime(chat_id, month_offset=0):
@@ -148,12 +151,14 @@ def setup_handlers(bot):
             if selected_date == "past_date":
                 bot.send_message(call.message.chat.id, "Запись на прошедшую дату невозможна.")
             elif selected_date:
-                appointments[call.message.chat.id]['date'] = selected_date
+                if call.message.chat.id in appointments and appointments[call.message.chat.id]:
+                    appointments[call.message.chat.id][-1]['date'] = selected_date
                 available_times = get_available_times(selected_date, appointments)
                 markup = create_time_markup(available_times)
                 bot.send_message(call.message.chat.id, "Выберите время:", reply_markup=markup)
             else:
-                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=create_calendar())
+                bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id,
+                                              reply_markup=create_calendar())
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('time_'))
     def process_time_choice(call):
@@ -164,11 +169,13 @@ def setup_handlers(bot):
             call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
         """
         time = call.data.split('time_')[1]
-        selected_date = appointments[call.message.chat.id].get('date')
+        selected_date = appointments[call.message.chat.id][-1].get('date')
         datetime_str = f"{selected_date} {time}"
-        appointments[call.message.chat.id]['datetime'] = datetime_str
-        appointment = appointments[call.message.chat.id]
-        bot.send_message(call.message.chat.id, f"Вы записаны!\nСотрудник: {appointment['employee']}\nУслуга: {appointment['service']}\nДата и время: {appointment['datetime']}")
+        if call.message.chat.id in appointments and appointments[call.message.chat.id]:
+            appointments[call.message.chat.id][-1]['datetime'] = datetime_str
+        appointment = appointments[call.message.chat.id][-1]
+        bot.send_message(call.message.chat.id,
+                         f"Вы записаны!\nСотрудник: {appointment['employee']}\nУслуга: {appointment['service']}\nДата и время: {appointment['datetime']}")
         main_menu(call.message.chat.id)
 
     @bot.callback_query_handler(func=lambda call: call.data == "main_menu")
@@ -209,9 +216,12 @@ def setup_handlers(bot):
         Args:
             message (telebot.types.Message): Сообщение Telegram.
         """
-        if message.chat.id in appointments:
-            appointment = appointments[message.chat.id]
-            bot.send_message(message.chat.id, f"Ваши записи:\nСотрудник: {appointment['employee']}\nУслуга: {appointment['service']}\nДата и время: {appointment['datetime']}")
+        user_appointments = appointments.get(message.chat.id, [])
+        if user_appointments:
+            response = "Ваши записи:\n"
+            for i, appointment in enumerate(user_appointments, 1):
+                response += f"Запись №{i}\nСотрудник: {appointment['employee']}\nУслуга: {appointment['service']}\nДата и время: {appointment['datetime']}\n"
+            bot.send_message(message.chat.id, response)
         else:
             bot.send_message(message.chat.id, "У вас нет записей.")
         main_menu(message.chat.id)
@@ -224,9 +234,35 @@ def setup_handlers(bot):
         Args:
             message (telebot.types.Message): Сообщение Telegram.
         """
-        if message.chat.id in appointments:
-            del appointments[message.chat.id]
-            bot.send_message(message.chat.id, "Ваша запись отменена.")
+        user_appointments = appointments.get(message.chat.id, [])
+        if user_appointments:
+            markup = types.InlineKeyboardMarkup()
+            for i, appointment in enumerate(user_appointments, 1):
+                button_text = f"{i}. {appointment['employee']} - {appointment['service']} - {appointment['datetime']}"
+                markup.add(types.InlineKeyboardButton(button_text, callback_data=f"cancel_{i}"))
+            markup.add(types.InlineKeyboardButton("Назад", callback_data="main_menu"))
+            bot.send_message(message.chat.id, "Выберите запись для отмены:", reply_markup=markup)
         else:
             bot.send_message(message.chat.id, "У вас нет записей для отмены.")
         main_menu(message.chat.id)
+
+    @bot.callback_query_handler(func=lambda call: call.data.startswith('cancel_'))
+    def process_cancel_choice(call):
+        """
+        Обрабатывает выбор отмены записи и удаляет выбранную запись.
+
+        Args:
+            call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
+        appointment_index = int(call.data.split('cancel_')[1]) - 1
+        user_appointments = appointments.get(call.message.chat.id, [])
+        if 0 <= appointment_index < len(user_appointments):
+            del user_appointments[appointment_index]
+            if user_appointments:
+                appointments[call.message.chat.id] = user_appointments
+            else:
+                del appointments[call.message.chat.id]
+            bot.send_message(call.message.chat.id, "Запись отменена.")
+        else:
+            bot.send_message(call.message.chat.id, "Неверный выбор. Попробуйте снова.")
+        main_menu(call.message.chat.id)
