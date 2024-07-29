@@ -27,6 +27,7 @@ from calendar_utils import (create_calendar, create_time_markup,
 from config import EMPLOYEES, SERVICES
 from telebot import types
 
+
 appointments = {}
 
 
