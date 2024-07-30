@@ -84,13 +84,19 @@ def setup_handlers(bot):
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('employee_'))
     def process_employee_choice(call):
+        """
+        Обрабатывает выбор сотрудника и запускает выбор услуги.
+
+        Args:
+            call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
         employee = call.data.split('employee_')[1]
         if call.message.chat.id not in appointments:
             appointments[call.message.chat.id] = []
         appointments[call.message.chat.id].append({"employee": employee})
-        choose_service(call.message.chat.id)
+        choose_service(call.message.chat.id, employee)
 
-    def choose_service(chat_id):
+    def choose_service(chat_id, employee):
         """
         Отправляет пользователю список услуг для выбора.
 
@@ -98,13 +104,19 @@ def setup_handlers(bot):
             chat_id (int): ID чата Telegram.
         """
         markup = types.InlineKeyboardMarkup()
-        for service in SERVICES:
-            markup.add(types.InlineKeyboardButton(service, callback_data=f"service_{service}"))
+        for service, price in SERVICES[employee]:
+            markup.add(types.InlineKeyboardButton(f"{service} - {price}", callback_data=f"service_{service}"))
         markup.add(types.InlineKeyboardButton("Назад", callback_data="choose_employee"))
         bot.send_message(chat_id, "Выберите услугу:", reply_markup=markup)
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('service_'))
     def process_service_choice(call):
+        """
+        Обрабатывает выбор услуги и запускает выбор даты.
+
+        Args:
+            call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
         service = call.data.split('service_')[1]
         if call.message.chat.id in appointments and appointments[call.message.chat.id]:
             appointments[call.message.chat.id][-1]['service'] = service
@@ -125,6 +137,12 @@ def setup_handlers(bot):
     @bot.callback_query_handler(
         func=lambda call: call.data.startswith('day_') or call.data in ["prev_month", "next_month", "ignore"])
     def process_calendar(call):
+        """
+        Обрабатывает выбор даты или навигацию по календарю.
+
+        Args:
+           call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
         if call.data == "next_month":
             choose_datetime(call.message.chat.id, 1)
         elif call.data == "prev_month":
@@ -145,6 +163,12 @@ def setup_handlers(bot):
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('time_'))
     def process_time_choice(call):
+        """
+        Обрабатывает выбор времени и подтверждает запись.
+
+        Args:
+            call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
         time = call.data.split('time_')[1]
         selected_date = appointments[call.message.chat.id][-1].get('date')
         datetime_str = f"{selected_date} {time}"
@@ -187,6 +211,12 @@ def setup_handlers(bot):
 
     @bot.message_handler(func=lambda message: message.text == "Просмотреть записи")
     def view_appointments(message):
+        """
+        Обрабатывает команду "Просмотреть записи" и отображает текущие записи пользователя.
+
+        Args:
+            message (telebot.types.Message): Сообщение Telegram.
+        """
         user_appointments = appointments.get(message.chat.id, [])
         if user_appointments:
             response = "Ваши записи:\n"
@@ -199,6 +229,12 @@ def setup_handlers(bot):
 
     @bot.message_handler(func=lambda message: message.text == "Отменить запись")
     def cancel(message):
+        """
+        Обрабатывает команду "Отменить запись" и отменяет текущие записи пользователя.
+
+        Args:
+            message (telebot.types.Message): Сообщение Telegram.
+        """
         user_appointments = appointments.get(message.chat.id, [])
         if user_appointments:
             markup = types.InlineKeyboardMarkup()
@@ -213,6 +249,11 @@ def setup_handlers(bot):
 
     @bot.callback_query_handler(func=lambda call: call.data.startswith('cancel_'))
     def process_cancel_choice(call):
+        """
+        Обрабатывает выбор отмены записи и удаляет выбранную запись.
+        Args:
+            call (telebot.types.CallbackQuery): Входящий запрос от пользователя.
+        """
         appointment_index = int(call.data.split('cancel_')[1]) - 1
         user_appointments = appointments.get(call.message.chat.id, [])
         if 0 <= appointment_index < len(user_appointments):
